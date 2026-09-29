@@ -330,7 +330,7 @@ async function deleteRecord(recordKey) {
 		showToast('Esta zona aún no está guardada en la base de datos.');
 		return;
 	}
-	if (!window.confirm(`¿Eliminar la zona "${record.title}" de este navegador?`)) return;
+	if (!window.confirm(`¿Eliminar la zona "${record.title}" para todos los visitantes?`)) return;
 	const { error } = await supabaseClient.from('zones').delete().eq('id', record.id);
 	if (error) {
 		showToast(error.message);
@@ -349,6 +349,7 @@ async function deleteRecord(recordKey) {
 function startDrawing(record = null) {
 	if (!isAdmin) return;
 	if (drawing) return;
+	if (record?.feature.getBounds) map.fitBounds(record.feature.getBounds(), { maxZoom: 7, padding: [48, 48], animate: false });
 	drawing = true;
 	editingRecord = record;
 	selectedCells.clear();
@@ -524,13 +525,13 @@ function exportRegion() {
 		return;
 	}
 	const region = {
-		type: 'Territories',
+		type: editingRecord?.type || 'Territories',
 		title: elements.regionTitle.value.trim() || 'Nueva zona',
 		notes: elements.regionNotes.value.trim(),
 		wiki_link: editingRecord?.wiki_link || '',
-		order: 0,
-		strokecolor: 'E2764D',
-		fillcolor: 'E2764D',
+		order: editingRecord?.order || 0,
+		strokecolor: editingRecord?.strokecolor || 'E2764D',
+		fillcolor: editingRecord?.fillcolor || 'E2764D',
 		latlngarray: boundary.map(({ x, y }) => {
 			const point = map.unproject(L.point(x * GRID_CELL_SIZE + GRID_OFFSET_X, y * GRID_CELL_SIZE), gridReferenceZoom);
 			return { lat: Number(point.lat.toFixed(3)), lng: Number(point.lng.toFixed(3)) };
@@ -597,8 +598,13 @@ async function loadCategory(category) {
 	let records;
 	if (supabaseClient) {
 		const { data, error } = await supabaseClient.from('zones').select('id, data').eq('category', category.id).order('created_at');
-		if (error) throw error;
-		records = data.map((record) => ({ ...record.data, id: record.id }));
+		if (error) {
+			const response = await fetch(`data/${category.file}?v=${Date.now()}`, { cache: 'no-store' });
+			if (!response.ok) throw new Error(`No se pudo cargar ${category.file}`);
+			records = await response.json();
+		} else {
+			records = data.map((record) => ({ ...record.data, id: record.id }));
+		}
 	} else {
 		const response = await fetch(`data/${category.file}?v=${Date.now()}`, { cache: 'no-store' });
 		if (!response.ok) throw new Error(`No se pudo cargar ${category.file}`);
