@@ -1,131 +1,87 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
 <head>
 	<meta charset="utf-8">
-	<title>Infames Territory Map</title>
-	<link rel="icon" href="icons/favicon.ico"/>
-
-	<link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-	<link rel="stylesheet" href="fontawesome/css/font-awesome.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#171b19">
+	<meta name="description" content="Mapa interactivo de territorios y puntos de interés de Infames en NoPixel.">
+	<title>Infames | Mapa territorial</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 	<link rel="stylesheet" href="style.css">
-
-	<script src="js/libs/jquery-min.js"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
-	<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
-	<script src="js/libs/underscore-min.js"></script>
-	<script src="js/libs/backbone-min.js"></script>
-	<script src="js/libs/handlebars.js"></script>
-	<script src="//maps.googleapis.com/maps/api/js?v=3.exp&key="></script>
-	<script src="js/libs/maplabel-compiled.js"></script>
-	<script src="js/app.js"></script>
-
-	<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+	<script src="js/territory-map-grid.js" defer></script>
 </head>
 <body>
-	<header>
-		<p class="left" style="padding-top: 5px;">
-			<a href="">Infames Territory Map</a>
-		</p>
-		<ul class="right">
-			<div class="dropdown">
-				<a href="https://github.com/skyrossm/np-gangmap/graphs/contributors" target="_blank"><button class="btn btn-primary">Contributors</button></a>
-				<button class="btn btn-primary" id="toggleruler" onclick="toggleRuler();$(this).css('display', 'none');">Add Distance Ruler</button>
-				<button class="btn btn-primary" id="createzone" onclick="printArray()">Add New Region</button>
-				<button class="btn btn-secondary dropdown-toggle" type="button" id="ddmenu" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-					Select Map Type
-				</button>
-				<div class="dropdown-menu" aria-labelledby="ddmenu">
-					<a href="#" id="Atlas"           class="dropdown-item active" onclick="$('#' + map.getMapTypeId()).removeClass('active'); map.setMapTypeId('Atlas');           $(this).addClass('active');">Atlas</a>
-					<a href="#" id="Satellite"       class="dropdown-item"        onclick="$('#' + map.getMapTypeId()).removeClass('active'); map.setMapTypeId('Satellite');       $(this).addClass('active');">Satellite</a>
-					<a href="#" id="Road"            class="dropdown-item"        onclick="$('#' + map.getMapTypeId()).removeClass('active'); map.setMapTypeId('Road');            $(this).addClass('active');">Road</a>
-				</div>
-				</div>
+	<div class="app-shell">
+		<header class="topbar">
+			<a class="brand" href="#" aria-label="Infames, mapa territorial">
+				<span class="brand-mark">I</span>
+				<span class="brand-copy"><strong>INFAMES</strong><small>MAPA TERRITORIAL</small></span>
+			</a>
+			<div class="topbar-state"><span class="state-dot"></span><span id="map-status">Cargando mapa</span></div>
+			<div class="topbar-actions">
+				<button class="button button-quiet mobile-panel-toggle" id="panel-toggle" type="button">Capas</button>
+				<button class="button button-quiet" id="fit-map" type="button">Centrar mapa</button>
+				<button class="button button-primary" id="draw-region" type="button" hidden disabled>+ Nueva zona</button>
 			</div>
+		</header>
 
-		</ul>
-	</header>
+		<main class="workspace">
+			<aside class="sidebar" id="sidebar" aria-label="Panel de zonas y capas">
+				<div class="sidebar-intro">
+					<p class="eyebrow">NO PIXEL ROLEPLAY <span> / </span> LOS SANTOS</p>
+					<h1>Control<br>territorial</h1>
+					<p class="intro-copy">Zonas, facciones y puntos de interés.</p>
+				</div>
 
-	<div id="map" style="background:rgb(43, 164, 210);"></div>
+				<div class="stats-row" aria-live="polite">
+					<div class="stat"><strong id="total-count">--</strong><span>REGISTROS</span></div>
+					<div class="stat"><strong id="visible-count">--</strong><span>VISIBLES</span></div>
+					<div class="stat"><strong id="layer-count">--</strong><span>CAPAS</span></div>
+				</div>
 
-	<script type="x/template" id="sectionTemplate">
-		{{#each sections as | section |}}
-			<section class="type">
-				<h3>{{name}}</h3>
-				<ul>
-					{{#each categories}}
-						<li><label><input type="checkbox" {{#if enabled}}checked{{/if}} value="{{name}}" data-section="{{section.name}}"> <img src="icons/{{icon}}"> {{name}}</label> <a href="#" class="details" data-section="{{section.name}}" data-name="{{name}}"><i class="icon-chevron-sign-right"></i></a></li>
-					{{/each}}					
-					{{#ifEquals name "General"}}
-						<li><label><input type="checkbox" {{#if enabled}}checked{{/if}} value="labels"> <img src="icons/General/wall-breach.png"> Labels</label> <a href="#" class="details" data-name="Labels"></a></li>
-					{{/ifEquals}}
+				<section class="sidebar-section layer-section" aria-labelledby="layers-title">
+					<div class="section-heading"><h2 id="layers-title">Capas del mapa</h2><span id="layer-total" class="section-meta">05</span></div>
+					<div class="layer-list" id="layer-list"></div>
+				</section>
 
-				</ul>
+				<section class="sidebar-section places-section" aria-labelledby="places-title">
+					<div class="section-heading"><h2 id="places-title">Zonas y lugares</h2><span class="section-meta" id="result-count">--</span></div>
+					<label class="search-field">
+						<span class="search-icon" aria-hidden="true">/</span>
+						<input id="location-search" type="search" placeholder="Buscar una zona..." autocomplete="off">
+					</label>
+					<div class="location-list" id="location-list" aria-live="polite"></div>
+				</section>
+
+				<footer class="sidebar-footer"><span class="footer-mark">IM</span><span>DATOS DEL TERRITORIO<br><a href="https://github.com/LowS1312/inf-gangmap" target="_blank" rel="noreferrer">INFAMES COMMUNITY</a></span></footer>
+			</aside>
+
+			<section class="map-stage" aria-label="Mapa interactivo de territorios">
+				<div id="map" role="application" aria-label="Mapa interactivo de Los Santos"></div>
+				<div class="map-caption"><span class="caption-dot"></span>LOS SANTOS <span class="caption-divider">/</span> ATLAS</div>
+				<div class="draw-controls" id="draw-controls" hidden>
+					<span id="draw-hint">Selecciona cuadrados del mapa para crear una zona</span>
+					<button class="button button-quiet" id="cancel-region" type="button">Cancelar</button>
+					<button class="button button-primary" id="finish-region" type="button">Exportar zona (0)</button>
+				</div>
+				<div class="toast" id="toast" role="status" aria-live="polite"></div>
 			</section>
-		{{/each}}
-	</script>
+		</main>
+	</div>
 
-	<script type="x/template" id="categoryDetailsTemplate">
-		<section class="type">
-			<h3><a href="#" class="back details"><i class="icon-chevron-sign-left"></i></a> {{category}}</h3>
-			<ul class="listview">
-				{{#with this as | root |}}
-				{{#each locations}}
-					<li data-section="{{root.section}}" data-name="{{root.category}}"><div style="height:20px;width:20px;background-color:#{{fillcolor}};border: 3px solid #{{strokecolor}}; display:inline-block;margin-right:10px;"></div><label>{{title}}</label></li>
-				{{/each}}
-				{{/with}}
-			</ul>
+	<div class="dialog-backdrop" id="export-dialog" hidden>
+		<section class="export-dialog" role="dialog" aria-modal="true" aria-labelledby="export-title">
+			<div class="dialog-heading"><div><p class="eyebrow">NUEVA ENTRADA</p><h2 id="export-title">Exportar zona</h2></div><button class="close-button" id="close-dialog" type="button" aria-label="Cerrar">×</button></div>
+			<label class="dialog-label" for="region-title">Nombre de la zona</label>
+			<input class="dialog-input" id="region-title" value="Nueva zona" maxlength="80">
+			<label class="dialog-label" for="region-json">JSON generado</label>
+			<textarea class="dialog-json" id="region-json" readonly spellcheck="false"></textarea>
+			<div class="dialog-actions"><button class="button button-quiet" id="close-export" type="button">Cerrar</button><button class="button button-primary" id="copy-json" type="button">Copiar JSON</button></div>
 		</section>
-	</script>
-
-	<script type="x/template" id="markerPopupTemplate2">
-		<div id="info-window" style="max-width:420px;">
-			<div class="scrollable">
-				<span class="header">
-					<h3>{{title}}</h3>
-				</span>
-				<div id="info-body">
-					{{#if notes}}
-						<br>
-						<p class="notes">{{notes}}</p>
-					{{/if}}
-					{{#if video}}
-						<div class="video-{{id}}">
-							<br>
-							<h4>Video</h4>
-							<div class="youtubewrapper">
-								<iframe width="100%" src="//www.youtube.com/embed/{{video.yt_id}}?theme=light&amp;autoplay=0&amp;autohide=1&amp;iv_load_policy=3&amp;rel=0&amp;showinfo=0&amp;loop=1{{#if video.start}}&amp;start={{timestampToSeconds video.start}}{{/if}}{{#if video.end}}&amp;end={{timestampToSeconds video.end}}{{/if}}" frameborder="0" allowfullscreen></iframe>
-							</div>
-							{{#if video.yt_user_link}}
-								<p>
-									<a href="//www.youtube.com/{{video.yt_user_link}}" style="color:#222;font-size:.8em;float:right;" target="_blank">
-										Video by {{video.yt_user_display}}
-									</a>
-								</p>
-							{{/if}}
-						</div>
-					{{/if}}
-					{{#if images}}
-						<br>
-				 		<h4>Images</h4>
-					{{/if}}
-					{{#each images}}
-						<div class="image-{{id}}">
-						 	<span>{{headline}}</span>
-						 	<img src="{{url}}" class="image-{{id}}">
-						</div>
-						<br>
-				 	{{/each}}
-					{{#if wiki_link}}
-						<hr>
-						<a target="_blank" href="{{wiki_link}}">See {{title}} on the Infames Web</a>
-					{{/if}}
-				</div>
-			</div>
-		</div>
-	</script>
-
-	<div id="typeDetails" class="types"></div>
-
-	<div id="types" class="types"></div>
+	</div>
 </body>
 </html>
