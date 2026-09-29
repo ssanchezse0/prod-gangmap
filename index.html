@@ -12,7 +12,9 @@
 	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 	<link rel="stylesheet" href="style.css">
 	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
-	<script src="js/territory-map-grid.js?v=2" defer></script>
+	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
+	<script src="js/supabase-config.js" defer></script>
+	<script src="js/territory-map-grid.js?v=3" defer></script>
 </head>
 <body>
 	<div class="app-shell">
@@ -25,6 +27,7 @@
 			<div class="topbar-actions">
 				<button class="button button-quiet mobile-panel-toggle" id="panel-toggle" type="button">Capas</button>
 				<button class="button button-quiet" id="fit-map" type="button">Centrar mapa</button>
+				<button class="button button-quiet" id="admin-toggle" type="button">Acceso admin</button>
 				<button class="button button-primary" id="draw-region" type="button" hidden disabled>+ Nueva zona</button>
 			</div>
 		</header>
@@ -78,9 +81,25 @@
 			<div class="dialog-heading"><div><p class="eyebrow">NUEVA ENTRADA</p><h2 id="export-title">Exportar zona</h2></div><button class="close-button" id="close-dialog" type="button" aria-label="Cerrar">×</button></div>
 			<label class="dialog-label" for="region-title">Nombre de la zona</label>
 			<input class="dialog-input" id="region-title" value="Nueva zona" maxlength="80">
+			<label class="dialog-label" for="region-notes">Notas</label>
+			<textarea class="dialog-input dialog-notes" id="region-notes" maxlength="2000"></textarea>
 			<label class="dialog-label" for="region-json">JSON generado</label>
 			<textarea class="dialog-json" id="region-json" readonly spellcheck="false"></textarea>
-			<div class="dialog-actions"><button class="button button-quiet" id="close-export" type="button">Cerrar</button><button class="button button-primary" id="copy-json" type="button">Copiar JSON</button></div>
+			<div class="dialog-actions"><button class="button button-quiet" id="close-export" type="button">Cerrar</button><button class="button button-quiet" id="copy-json" type="button">Copiar JSON</button><button class="button button-primary" id="save-region" type="button" hidden disabled>Guardar zona</button></div>
+		</section>
+	</div>
+
+	<div class="dialog-backdrop" id="admin-dialog" hidden>
+		<section class="export-dialog admin-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-title">
+			<div class="dialog-heading"><div><p class="eyebrow">ZONAS PRIVADAS</p><h2 id="admin-title">Acceso admin</h2></div><button class="close-button" id="close-admin" type="button" aria-label="Cerrar">×</button></div>
+			<form id="admin-form">
+				<label class="dialog-label" for="admin-email">Correo</label>
+				<input class="dialog-input" id="admin-email" type="email" autocomplete="username" required>
+				<label class="dialog-label" for="admin-password">Contraseña</label>
+				<input class="dialog-input" id="admin-password" type="password" autocomplete="current-password" required>
+				<p class="dialog-error" id="admin-error" role="alert" hidden></p>
+				<div class="dialog-actions"><button class="button button-quiet" id="cancel-admin" type="button">Cancelar</button><button class="button button-primary" id="sign-in" type="submit">Iniciar sesión</button></div>
+			</form>
 		</section>
 	</div>
 </body>
