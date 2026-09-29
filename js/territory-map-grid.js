@@ -455,7 +455,7 @@ function exportRegion() {
 }
 
 async function loadCategory(category) {
-	const response = await fetch(`data/${category.file}`);
+	const response = await fetch(`data/${category.file}?v=${Date.now()}`, { cache: 'no-store' });
 	if (!response.ok) throw new Error(`No se pudo cargar ${category.file}`);
 	const records = await response.json();
 	const layer = L.featureGroup();
