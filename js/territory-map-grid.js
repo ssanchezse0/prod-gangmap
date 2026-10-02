@@ -58,7 +58,6 @@ let activePointerId = null;
 let mapDraggingWasEnabled = true;
 let drawLayer;
 let toastTimeout;
-let patternIndex = 0;
 
 function escapeHTML(value = '') {
 	return String(value).replace(/[&<>"']/g, (character) => ({
@@ -96,48 +95,6 @@ function popupContent(record) {
 	return `<p class="popup-category">${escapeHTML(category.name)}</p><h3 class="popup-title">${escapeHTML(record.title)}</h3>${notes}${link}${editButton}${deleteButton}`;
 }
 
-function applySquarePattern(feature, color) {
-	const path = feature.getElement();
-	const svg = path?.ownerSVGElement;
-	if (!svg) return;
-
-	let defs = svg.querySelector('defs[data-prodigy-patterns]');
-	if (!defs) {
-		defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-		defs.setAttribute('data-prodigy-patterns', 'true');
-		svg.insertBefore(defs, svg.firstChild);
-	}
-
-	if (!feature._prodigyPatternId) feature._prodigyPatternId = `prodigy-grid-${++patternIndex}`;
-	let pattern = defs.querySelector(`#${feature._prodigyPatternId}`);
-	if (!pattern) {
-		pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
-		pattern.setAttribute('id', feature._prodigyPatternId);
-		pattern.setAttribute('width', '24');
-		pattern.setAttribute('height', '24');
-		pattern.setAttribute('patternUnits', 'userSpaceOnUse');
-
-		const square = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-		square.setAttribute('width', '24');
-		square.setAttribute('height', '24');
-		square.setAttribute('fill', color);
-		square.setAttribute('fill-opacity', '0.38');
-		pattern.appendChild(square);
-
-		const grid = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-		grid.setAttribute('d', 'M 24 0 H 0 V 24');
-		grid.setAttribute('fill', 'none');
-		grid.setAttribute('stroke', '#dce9ee');
-		grid.setAttribute('stroke-opacity', '0.7');
-		grid.setAttribute('stroke-width', '1');
-		pattern.appendChild(grid);
-		defs.appendChild(pattern);
-	}
-
-	path.setAttribute('fill', `url(#${feature._prodigyPatternId})`);
-	path.setAttribute('fill-opacity', '1');
-}
-
 function createFeature(record, category) {
 	const points = Array.isArray(record.latlngarray)
 		? record.latlngarray.map((point) => [Number(point.lat), Number(point.lng)]).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng))
@@ -154,7 +111,6 @@ function createFeature(record, category) {
 	const entry = { ...record, categoryId: category.id, recordKey: createRecordKey(record, category.id), feature };
 	feature.bindPopup(popupContent(entry), { maxWidth: 310 });
 	feature.bindTooltip(escapeHTML(record.title), { sticky: true, direction: 'top', className: 'map-tooltip' });
-	if (isArea) feature.on('add', () => applySquarePattern(feature, color));
 	feature.on('mouseover', () => feature.setStyle({ weight: 3, opacity: 1 }));
 	feature.on('mouseout', () => feature.setStyle({ weight: 2, opacity: 0.88 }));
 	feature.on('popupopen', (event) => {
