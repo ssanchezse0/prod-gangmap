@@ -54,7 +54,7 @@ let patternIndex = 0;
 
 let gridReferenceZoom = 4;
 let gridOffsetReferenceZoom = 4;
-const GRID_CELL_SIZE = 3.5;
+const GRID_CELL_SIZE = 4;
 const GRID_OFFSET_X = 4;
 const MAX_GRID_CELLS = 20000;
 
