@@ -29,6 +29,7 @@ const elements = {
 	toast: document.querySelector('#toast'),
 	drawControls: document.querySelector('#draw-controls'),
 	drawHint: document.querySelector('#draw-hint'),
+	regionColor: document.querySelector('#region-color'),
 	exportDialog: document.querySelector('#export-dialog'),
 	regionTitle: document.querySelector('#region-title'),
 	regionNotes: document.querySelector('#region-notes'),
@@ -369,6 +370,8 @@ function startDrawing(record = null) {
 	elements.drawControls.hidden = false;
 	elements.regionTitle.value = record?.title || 'Nueva zona';
 	elements.regionNotes.value = record?.notes || '';
+	const category = categories.find((item) => item.id === record?.categoryId) || categories[0];
+	elements.regionColor.value = /^[\da-f]{6}$/i.test(record?.fillcolor || '') ? `#${record.fillcolor}` : category.color;
 	updateDrawPreview();
 	document.querySelector('#draw-region').textContent = record ? 'Editando zona' : 'Seleccionando cuadrados';
 	if (record) selectRecordCells(record);
@@ -403,7 +406,7 @@ function setGridCell(column, row, refreshPreview = true) {
 		color: '#dce9ee',
 		weight: 1,
 		opacity: 0.95,
-		fillColor: '#36a9f2',
+		fillColor: elements.regionColor.value,
 		fillOpacity: 0.58,
 		interactive: false,
 	}).addTo(drawLayer);
@@ -425,6 +428,11 @@ function toggleGridCell(latlng) {
 		setGridCell(column, row);
 	}
 	updateDrawPreview();
+}
+
+function updateDrawCellColor() {
+	const color = elements.regionColor.value;
+	selectedCells.forEach(({ layer }) => layer.setStyle({ fillColor: color }));
 }
 
 function pointInPolygon(point, polygon) {
@@ -535,6 +543,7 @@ function exportRegion() {
 		showToast('La zona debe ser continua y sin huecos; rellena las celdas interiores.');
 		return;
 	}
+	const zoneColor = elements.regionColor.value.replace('#', '').toUpperCase();
 	const region = {
 		_legacyRecordKey: editingRecord?._legacyRecordKey,
 		type: editingRecord?.type || 'Territories',
@@ -542,8 +551,8 @@ function exportRegion() {
 		notes: elements.regionNotes.value.trim(),
 		wiki_link: editingRecord?.wiki_link || '',
 		order: editingRecord?.order || 0,
-		strokecolor: editingRecord?.strokecolor || 'E2764D',
-		fillcolor: editingRecord?.fillcolor || 'E2764D',
+		strokecolor: zoneColor,
+		fillcolor: zoneColor,
 		latlngarray: boundary.map(({ x, y }) => {
 			const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
 			const point = map.unproject(L.point(x * GRID_CELL_SIZE + offsetX, y * GRID_CELL_SIZE), gridReferenceZoom);
@@ -685,6 +694,7 @@ async function initialize() {
 }
 
 elements.locationSearch.addEventListener('input', renderLocations);
+elements.regionColor.addEventListener('input', updateDrawCellColor);
 document.querySelector('#fit-map').addEventListener('click', fitVisible);
 document.querySelector('#draw-region').addEventListener('click', startDrawing);
 document.querySelector('#cancel-region').addEventListener('click', cancelDrawing);

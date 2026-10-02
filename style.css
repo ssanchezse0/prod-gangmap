@@ -122,6 +122,8 @@ a { color: inherit; }
 .draw-controls { position: absolute; z-index: 500; top: 15px; left: 50%; display: flex; align-items: center; gap: 8px; padding: 7px; border: 1px solid #3b433e; border-radius: 4px; background: #171b19f2; box-shadow: 0 5px 25px #0004; transform: translateX(-50%); }
 .draw-controls span { padding: 0 9px; color: #d6dbd0; font-size: 11px; white-space: nowrap; }
 .draw-controls .button { min-height: 31px; }
+.draw-color-control { display: inline-flex; align-items: center; gap: 6px; color: #d6dbd0; font-size: 11px; white-space: nowrap; }
+.draw-color-control input { width: 32px; height: 28px; padding: 2px; border: 1px solid #566159; border-radius: 3px; background: #121614; cursor: pointer; }
 .toast { position: absolute; z-index: 600; right: 14px; bottom: 55px; max-width: min(360px, calc(100% - 28px)); padding: 10px 13px; border: 1px solid #424a42; border-left: 3px solid var(--accent); background: #171b19f2; color: var(--ink); font-size: 11px; opacity: 0; pointer-events: none; transform: translateY(5px); transition: opacity 180ms ease, transform 180ms ease; }
 .toast.is-visible { opacity: 1; transform: translateY(0); }
 .is-drawing { cursor: crosshair !important; }
