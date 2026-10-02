@@ -1,6 +1,6 @@
-NoPixel Territory map
+PRODIGY Territory map
 ====
-Mapa público de solo lectura de territorios y puntos de interés de Infames en NoPixel.
+Mapa público de territorios y puntos de interés de PRODIGY.
 El sitio carga datos desde los JSON del repositorio y no puede modificarlos.
 
 ## Propose a location

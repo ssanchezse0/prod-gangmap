@@ -99,18 +99,18 @@ function applySquarePattern(feature, color) {
 	const svg = path?.ownerSVGElement;
 	if (!svg) return;
 
-	let defs = svg.querySelector('defs[data-infames-patterns]');
+	let defs = svg.querySelector('defs[data-prodigy-patterns]');
 	if (!defs) {
 		defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-		defs.setAttribute('data-infames-patterns', 'true');
+		defs.setAttribute('data-prodigy-patterns', 'true');
 		svg.insertBefore(defs, svg.firstChild);
 	}
 
-	if (!feature._infamesPatternId) feature._infamesPatternId = `infames-grid-${++patternIndex}`;
-	let pattern = defs.querySelector(`#${feature._infamesPatternId}`);
+	if (!feature._prodigyPatternId) feature._prodigyPatternId = `prodigy-grid-${++patternIndex}`;
+	let pattern = defs.querySelector(`#${feature._prodigyPatternId}`);
 	if (!pattern) {
 		pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
-		pattern.setAttribute('id', feature._infamesPatternId);
+		pattern.setAttribute('id', feature._prodigyPatternId);
 		pattern.setAttribute('width', '24');
 		pattern.setAttribute('height', '24');
 		pattern.setAttribute('patternUnits', 'userSpaceOnUse');
@@ -132,7 +132,7 @@ function applySquarePattern(feature, color) {
 		defs.appendChild(pattern);
 	}
 
-	path.setAttribute('fill', `url(#${feature._infamesPatternId})`);
+	path.setAttribute('fill', `url(#${feature._prodigyPatternId})`);
 	path.setAttribute('fill-opacity', '1');
 }
 
@@ -658,7 +658,7 @@ async function initialize() {
 		minZoom: 1,
 		maxZoom: 7,
 		maxNativeZoom: 7,
-		attribution: '<a href="https://github.com/LowS1312/inf-gangmap" target="_blank" rel="noreferrer">Atlas Infames</a>',
+		attribution: '<a href="https://github.com/LowS1312/inf-gangmap" target="_blank" rel="noreferrer">Atlas PRODIGY</a>',
 	}).addTo(map);
 	L.control.zoom({ position: 'bottomright' }).addTo(map);
 	map.on('click', (event) => {

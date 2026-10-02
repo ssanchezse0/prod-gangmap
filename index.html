@@ -4,8 +4,8 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta name="theme-color" content="#171b19">
-	<meta name="description" content="Mapa interactivo de territorios y puntos de interés de Infames en NoPixel.">
-	<title>Infames | Mapa territorial</title>
+	<meta name="description" content="Mapa interactivo de territorios y puntos de interés de PRODIGY.">
+	<title>PRODIGY | Mapa territorial</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 	<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -19,14 +19,14 @@
 	</script>
 	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-	<script src="js/territory-map-grid.js?v=18" defer></script>
+	<script src="js/territory-map-grid.js?v=19" defer></script>
 </head>
 <body>
 	<div class="app-shell">
 		<header class="topbar">
-			<a class="brand" href="#" aria-label="Infames, mapa territorial">
-				<span class="brand-mark">I</span>
-				<span class="brand-copy"><strong>INFAMES</strong><small>MAPA TERRITORIAL</small></span>
+			<a class="brand" href="#" aria-label="PRODIGY, mapa territorial">
+				<span class="brand-mark">P</span>
+				<span class="brand-copy"><strong>PRODIGY</strong><small>MAPA TERRITORIAL</small></span>
 			</a>
 			<div class="topbar-state"><span class="state-dot"></span><span id="map-status">Cargando mapa</span></div>
 			<div class="topbar-actions">
@@ -40,7 +40,7 @@
 		<main class="workspace">
 			<aside class="sidebar" id="sidebar" aria-label="Panel de zonas y capas">
 				<div class="sidebar-intro">
-					<p class="eyebrow">NO PIXEL ROLEPLAY <span> / </span> LOS SANTOS</p>
+					<p class="eyebrow">PRODIGY ROLEPLAY <span> / </span> LOS SANTOS</p>
 					<h1>Control<br>territorial</h1>
 					<p class="intro-copy">Zonas, facciones y puntos de interés.</p>
 				</div>
@@ -65,7 +65,7 @@
 					<div class="location-list" id="location-list" aria-live="polite"></div>
 				</section>
 
-				<footer class="sidebar-footer"><span class="footer-mark">IM</span><span>DATOS DEL TERRITORIO<br><a href="https://github.com/LowS1312/inf-gangmap" target="_blank" rel="noreferrer">INFAMES COMMUNITY</a></span></footer>
+				<footer class="sidebar-footer"><span class="footer-mark">P</span><span>DATOS DEL TERRITORIO<br><a href="https://github.com/ssanchezse0/prod-gangmap" target="_blank" rel="noreferrer">PRODIGY COMMUNITY</a></span></footer>
 			</aside>
 
 			<section class="map-stage" aria-label="Mapa interactivo de territorios">

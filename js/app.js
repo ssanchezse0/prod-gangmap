@@ -127,7 +127,7 @@ $(function() {
 	});
 	var sections = new SectionCollection([
 		new SectionModel({
-			name: 'Infames',
+			name: 'PRODIGY',
 			categories: new CategoriesCollection([
 				new CategoryModel({
 					name: 'Territories',
@@ -562,7 +562,7 @@ function printArray() {
 	msg += '```json\n\t{\n\t\t"type": "Territories",'
 	+ '\n\t\t"title": "<edit this>",'
 	+ '\n\t\t"notes": "<edit this>",'
-	+ '\n\t\t"wiki_link": "https://nopixel.fandom.com/wiki/<edit this>",'
+	+ '\n\t\t"wiki_link": "",'
 	+ '\n\t\t"order": 0,'
 	+ '\n\t\t"strokecolor": "FF0000",'
 	+ '\n\t\t"fillcolor": "FF0000",'
