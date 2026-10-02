@@ -29,6 +29,7 @@ const elements = {
 	toast: document.querySelector('#toast'),
 	drawControls: document.querySelector('#draw-controls'),
 	drawHint: document.querySelector('#draw-hint'),
+	drawCategory: document.querySelector('#draw-category'),
 	regionColor: document.querySelector('#region-color'),
 	exportDialog: document.querySelector('#export-dialog'),
 	regionTitle: document.querySelector('#region-title'),
@@ -45,19 +46,19 @@ const elements = {
 
 const locationRecords = [];
 const categoryLayers = new Map();
-const selectedCells = new Map();
 let activeCategoryIds = new Set(categories.filter((category) => category.enabled).map((category) => category.id));
 let map;
 let drawing = false;
+let drawingMode = 'freehand';
+let tracing = false;
+let drawChanged = false;
+let drawPoints = [];
+let drawPreview;
+let activePointerId = null;
+let mapDraggingWasEnabled = true;
 let drawLayer;
 let toastTimeout;
 let patternIndex = 0;
-
-let gridReferenceZoom = 4;
-let gridOffsetReferenceZoom = 4;
-const GRID_CELL_SIZE = 4;
-const GRID_OFFSET_X = 4;
-const MAX_GRID_CELLS = 20000;
 
 function escapeHTML(value = '') {
 	return String(value).replace(/[&<>"']/g, (character) => ({
@@ -136,39 +137,6 @@ function applySquarePattern(feature, color) {
 	path.setAttribute('fill', `url(#${feature._prodigyPatternId})`);
 	path.setAttribute('fill-opacity', '1');
 }
-
-function createStaticGrid() {
-	return L.gridLayer({ tileSize: 256, minZoom: 1, maxZoom: 7, noWrap: true, updateWhenIdle: true, keepBuffer: 1 });
-}
-
-const staticGrid = createStaticGrid();
-staticGrid.createTile = (coordinates) => {
-	const tile = document.createElement('canvas');
-	tile.width = 256;
-	tile.height = 256;
-	tile.className = 'static-grid-tile';
-	tile.style.pointerEvents = 'none';
-	const context = tile.getContext('2d');
-	const cellSize = GRID_CELL_SIZE * 2 ** (coordinates.z - gridReferenceZoom);
-	const offsetX = GRID_OFFSET_X * 2 ** (coordinates.z - gridOffsetReferenceZoom);
-	const originX = coordinates.x * 256;
-	const originY = coordinates.y * 256;
-	const firstX = Math.ceil((originX - offsetX) / cellSize) * cellSize + offsetX - originX;
-	const firstY = Math.ceil(originY / cellSize) * cellSize - originY;
-	context.strokeStyle = 'rgba(229, 240, 243, 0.48)';
-	context.lineWidth = 1;
-	context.beginPath();
-	for (let x = firstX; x <= 256; x += cellSize) {
-		context.moveTo(x, 0);
-		context.lineTo(x, 256);
-	}
-	for (let y = firstY; y <= 256; y += cellSize) {
-		context.moveTo(0, y);
-		context.lineTo(256, y);
-	}
-	context.stroke();
-	return tile;
-};
 
 function createFeature(record, category) {
 	const points = Array.isArray(record.latlngarray)
@@ -360,29 +328,34 @@ function startDrawing(record = null) {
 	if (record?.feature?.getBounds) map.fitBounds(record.feature.getBounds(), { maxZoom: 7, padding: [48, 48], animate: false });
 	drawing = true;
 	editingRecord = record;
-	selectedCells.clear();
+	drawChanged = false;
+	drawPoints = (record?.latlngarray || []).map((point) => L.latLng(Number(point.lat), Number(point.lng)));
 	drawLayer = L.layerGroup().addTo(map);
-	gridReferenceZoom = map.getZoom() - 1;
-	gridOffsetReferenceZoom = gridReferenceZoom;
-	staticGrid.redraw();
-	staticGrid.addTo(map);
+	mapDraggingWasEnabled = map.dragging.enabled();
 	map.getContainer().classList.add('is-drawing');
 	elements.drawControls.hidden = false;
 	elements.regionTitle.value = record?.title || 'Nueva zona';
 	elements.regionNotes.value = record?.notes || '';
 	const category = categories.find((item) => item.id === record?.categoryId) || categories[0];
+	elements.drawCategory.value = category.id;
+	elements.drawCategory.disabled = Boolean(record);
 	elements.regionColor.value = /^[\da-f]{6}$/i.test(record?.fillcolor || '') ? `#${record.fillcolor}` : category.color;
+	renderDrawShape(Boolean(record));
 	updateDrawPreview();
-	document.querySelector('#draw-region').textContent = record ? 'Editando zona' : 'Seleccionando cuadrados';
-	if (record) selectRecordCells(record);
+	document.querySelector('#draw-region').textContent = record ? 'Editando zona' : 'Dibujando zona';
 	if (window.innerWidth <= 720) elements.sidebar.classList.remove('is-open');
 }
 
 function cancelDrawing(preserveEdit = false) {
+	tracing = false;
+	activePointerId = null;
+	drawChanged = false;
+	if (mapDraggingWasEnabled) map.dragging.enable();
 	if (drawLayer) map.removeLayer(drawLayer);
-	map.removeLayer(staticGrid);
 	drawLayer = null;
-	selectedCells.clear();
+	drawPreview = null;
+	elements.drawCategory.disabled = false;
+	drawPoints = [];
 	drawing = false;
 	map.getContainer().classList.remove('is-drawing');
 	elements.drawControls.hidden = true;
@@ -390,157 +363,105 @@ function cancelDrawing(preserveEdit = false) {
 	if (!preserveEdit) editingRecord = null;
 }
 
-function getCellBounds(column, row) {
-	const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
-	const left = column * GRID_CELL_SIZE + offsetX;
-	const right = (column + 1) * GRID_CELL_SIZE + offsetX;
-	const topLeft = map.unproject(L.point(left, row * GRID_CELL_SIZE), gridReferenceZoom);
-	const bottomRight = map.unproject(L.point(right, (row + 1) * GRID_CELL_SIZE), gridReferenceZoom);
-	return L.latLngBounds(topLeft, bottomRight);
-}
-
-function setGridCell(column, row, refreshPreview = true) {
-	const key = `${column}:${row}`;
-	if (selectedCells.has(key)) return;
-	const layer = L.rectangle(getCellBounds(column, row), {
-		color: '#dce9ee',
-		weight: 1,
-		opacity: 0.95,
-		fillColor: elements.regionColor.value,
-		fillOpacity: 0.58,
-		interactive: false,
-	}).addTo(drawLayer);
-	selectedCells.set(key, { column, row, layer });
-	if (refreshPreview) updateDrawPreview();
-}
-
-function toggleGridCell(latlng) {
-	const projected = map.project(latlng, gridReferenceZoom);
-	const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
-	const column = Math.floor((projected.x - offsetX) / GRID_CELL_SIZE);
-	const row = Math.floor(projected.y / GRID_CELL_SIZE);
-	const key = `${column}:${row}`;
-	const existing = selectedCells.get(key);
-	if (existing) {
-		drawLayer.removeLayer(existing.layer);
-		selectedCells.delete(key);
-	} else {
-		setGridCell(column, row);
-	}
-	updateDrawPreview();
-}
-
-function updateDrawCellColor() {
-	const color = elements.regionColor.value;
-	selectedCells.forEach(({ layer }) => layer.setStyle({ fillColor: color }));
-}
-
-function pointInPolygon(point, polygon) {
-	let inside = false;
-	for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
-		const current = polygon[index];
-		const prior = polygon[previous];
-		const crosses = current.y > point.y !== prior.y > point.y;
-		if (crosses && point.x < ((prior.x - current.x) * (point.y - current.y)) / (prior.y - current.y) + current.x) inside = !inside;
-	}
-	return inside;
-}
-
-function selectRecordCells(record) {
-	const polygon = (record.latlngarray || []).map((point) => {
-		const projected = map.project([point.lat, point.lng], gridReferenceZoom);
-		return { x: projected.x, y: projected.y };
-	});
-	if (polygon.length < 3) return;
-	const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
-	const columns = polygon.map((point) => Math.floor((point.x - offsetX) / GRID_CELL_SIZE));
-	const rows = polygon.map((point) => Math.floor(point.y / GRID_CELL_SIZE));
-	const minColumn = Math.min(...columns);
-	const maxColumn = Math.max(...columns);
-	const minRow = Math.min(...rows);
-	const maxRow = Math.max(...rows);
-	if ((maxColumn - minColumn + 1) * (maxRow - minRow + 1) > MAX_GRID_CELLS) {
-		showToast('Acerca el mapa antes de editar esta zona.');
+function renderDrawShape(closed = false) {
+	if (drawPreview) drawLayer.removeLayer(drawPreview);
+	if (drawPoints.length < 2) {
+		drawPreview = null;
 		return;
 	}
-	for (let row = minRow; row <= maxRow; row++) {
-		for (let column = minColumn; column <= maxColumn; column++) {
-			const center = { x: column * GRID_CELL_SIZE + offsetX + GRID_CELL_SIZE / 2, y: row * GRID_CELL_SIZE + GRID_CELL_SIZE / 2 };
-			if (pointInPolygon(center, polygon)) setGridCell(column, row, false);
-		}
-	}
-	updateDrawPreview();
-}
-
-function traceSelectedBoundary() {
-	const edges = new Map();
-	const addEdge = (from, to) => {
-		const key = `${from.x},${from.y}>${to.x},${to.y}`;
-		const reverse = `${to.x},${to.y}>${from.x},${from.y}`;
-		if (edges.has(reverse)) edges.delete(reverse);
-		else edges.set(key, { from, to });
-	};
-
-	selectedCells.forEach(({ column, row }) => {
-		const topLeft = { x: column, y: row };
-		const topRight = { x: column + 1, y: row };
-		const bottomRight = { x: column + 1, y: row + 1 };
-		const bottomLeft = { x: column, y: row + 1 };
-		addEdge(topLeft, topRight);
-		addEdge(topRight, bottomRight);
-		addEdge(bottomRight, bottomLeft);
-		addEdge(bottomLeft, topLeft);
-	});
-
-	const loops = [];
-	while (edges.size) {
-		const first = edges.values().next().value;
-		const start = first.from;
-		const loop = [];
-		let edge = first;
-		let closed = false;
-		const maxSteps = edges.size;
-		for (let count = 0; count <= maxSteps; count++) {
-			edges.delete(`${edge.from.x},${edge.from.y}>${edge.to.x},${edge.to.y}`);
-			loop.push(edge.from);
-			if (edge.to.x === start.x && edge.to.y === start.y) {
-				closed = true;
-				break;
-			}
-
-			const candidates = [...edges.values()].filter((candidate) => candidate.from.x === edge.to.x && candidate.from.y === edge.to.y);
-			if (candidates.length === 0) break;
-			const direction = (candidate) => {
-				if (candidate.to.x > candidate.from.x) return 0;
-				if (candidate.to.y > candidate.from.y) return 1;
-				if (candidate.to.x < candidate.from.x) return 2;
-				return 3;
-			};
-			const incoming = direction(edge);
-			const turnPriority = [1, 0, 3, 2];
-			candidates.sort((left, right) => turnPriority.indexOf((direction(left) - incoming + 4) % 4) - turnPriority.indexOf((direction(right) - incoming + 4) % 4));
-			edge = candidates[0];
-		}
-		if (!closed) return null;
-		loops.push(loop);
-	}
-	return loops.length === 1 ? loops[0] : null;
+	const options = { color: elements.regionColor.value, weight: 3, opacity: 1, fillColor: elements.regionColor.value, fillOpacity: 0.28, interactive: false };
+	drawPreview = closed && drawPoints.length >= 3
+		? L.polygon(drawPoints, options)
+		: L.polyline(drawPoints, options);
+	drawPreview.addTo(drawLayer);
 }
 
 function updateDrawPreview() {
-	elements.drawHint.textContent = `${selectedCells.size} cuadrado${selectedCells.size === 1 ? '' : 's'} seleccionado${selectedCells.size === 1 ? '' : 's'} · clic para rellenar o quitar`;
-	document.querySelector('#finish-region').textContent = `${editingRecord ? 'Preparar cambios' : 'Preparar zona'} (${selectedCells.size})`;
+	const count = drawPoints.length;
+	if (drawingMode === 'points') {
+		elements.drawHint.textContent = count && !drawChanged && editingRecord
+			? `Zona actual (${count} vértices) · clic para redibujar`
+			: `${count} vértices · clic para añadir otro`;
+	} else {
+		elements.drawHint.textContent = count ? `${count} puntos trazados · arrastra para redibujar` : 'Arrastra sobre el mapa para dibujar una zona';
+	}
+	document.querySelector('#finish-region').textContent = `${editingRecord ? 'Preparar cambios' : 'Preparar zona'} (${count} puntos)`;
+}
+
+function beginDrawStroke(event) {
+	if (!drawing || drawingMode !== 'freehand' || event.button !== 0) return;
+	event.preventDefault();
+	event.stopPropagation();
+	tracing = true;
+	drawChanged = true;
+	activePointerId = event.pointerId;
+	map.dragging.disable();
+	drawPoints = [map.mouseEventToLatLng(event)];
+	renderDrawShape();
+	updateDrawPreview();
+	map.getContainer().setPointerCapture(event.pointerId);
+}
+
+function continueDrawStroke(event) {
+	if (!tracing || event.pointerId !== activePointerId) return;
+	const point = map.mouseEventToLatLng(event);
+	const previous = drawPoints[drawPoints.length - 1];
+	if (map.latLngToContainerPoint(previous).distanceTo(map.latLngToContainerPoint(point)) < 3) return;
+	drawPoints.push(point);
+	if (drawPreview) drawPreview.setLatLngs(drawPoints);
+	else renderDrawShape();
+	updateDrawPreview();
+}
+
+function finishDrawStroke(event) {
+	if (!tracing || event.pointerId !== activePointerId) return;
+	const point = map.mouseEventToLatLng(event);
+	const previous = drawPoints[drawPoints.length - 1];
+	if (map.latLngToContainerPoint(previous).distanceTo(map.latLngToContainerPoint(point)) >= 1) drawPoints.push(point);
+	tracing = false;
+	activePointerId = null;
+	if (mapDraggingWasEnabled) map.dragging.enable();
+	renderDrawShape(true);
+	updateDrawPreview();
+}
+
+function addDrawPoint(event) {
+	if (!drawing || drawingMode !== 'points' || tracing) return;
+	if (!drawChanged) {
+		drawPoints = [];
+		drawChanged = true;
+	}
+	const point = event.latlng;
+	const previous = drawPoints[drawPoints.length - 1];
+	if (previous && map.latLngToContainerPoint(previous).distanceTo(map.latLngToContainerPoint(point)) < 4) return;
+	drawPoints.push(point);
+	renderDrawShape(true);
+	updateDrawPreview();
+}
+
+function setDrawingMode(mode) {
+	if (drawing && drawingMode !== mode) {
+		drawChanged = false;
+		drawPoints = (editingRecord?.latlngarray || []).map((point) => L.latLng(Number(point.lat), Number(point.lng)));
+		renderDrawShape(Boolean(editingRecord));
+	}
+	drawingMode = mode;
+	document.querySelectorAll('[data-draw-mode]').forEach((button) => {
+		const selected = button.dataset.drawMode === mode;
+		button.classList.toggle('is-active', selected);
+		button.setAttribute('aria-pressed', String(selected));
+	});
+	if (drawing) updateDrawPreview();
+}
+
+function updateDrawShapeColor() {
+	drawPreview?.setStyle({ color: elements.regionColor.value, fillColor: elements.regionColor.value });
 }
 
 function exportRegion() {
 	if (!isAdmin || !supabaseClient) return;
-	if (selectedCells.size === 0) {
-		showToast('Rellena al menos un cuadrado para crear la zona.');
-		return;
-	}
-	const boundary = traceSelectedBoundary();
-	if (!boundary) {
-		showToast('La zona debe ser continua y sin huecos; rellena las celdas interiores.');
+	if (drawPoints.length < 3 || tracing) {
+		showToast('La zona necesita al menos 3 vértices y un trazo terminado.');
 		return;
 	}
 	const zoneColor = elements.regionColor.value.replace('#', '').toUpperCase();
@@ -553,11 +474,7 @@ function exportRegion() {
 		order: editingRecord?.order || 0,
 		strokecolor: zoneColor,
 		fillcolor: zoneColor,
-		latlngarray: boundary.map(({ x, y }) => {
-			const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
-			const point = map.unproject(L.point(x * GRID_CELL_SIZE + offsetX, y * GRID_CELL_SIZE), gridReferenceZoom);
-			return { lat: Number(point.lat.toFixed(3)), lng: Number(point.lng.toFixed(3)) };
-		}),
+		latlngarray: drawPoints.map((point) => ({ lat: Number(point.lat.toFixed(5)), lng: Number(point.lng.toFixed(5)) })),
 	};
 	elements.regionJson.value = JSON.stringify(region, null, 2);
 	elements.exportDialog.hidden = false;
@@ -576,7 +493,7 @@ async function saveRegion() {
 		showToast('No se pudo leer la zona generada.');
 		return;
 	}
-	const categoryId = editingRecord?.categoryId || 'territories';
+	const categoryId = editingRecord?.categoryId || elements.drawCategory.value;
 	const categoryState = categoryLayers.get(categoryId);
 	const category = categories.find((item) => item.id === categoryId);
 	const pointsAreValid = Array.isArray(region.latlngarray)
@@ -670,10 +587,12 @@ async function initialize() {
 		attribution: '<a href="https://github.com/LowS1312/inf-gangmap" target="_blank" rel="noreferrer">Atlas PRODIGY</a>',
 	}).addTo(map);
 	L.control.zoom({ position: 'bottomright' }).addTo(map);
-	map.on('click', (event) => {
-		if (!drawing) return;
-		toggleGridCell(event.latlng);
-	});
+	const mapContainer = map.getContainer();
+	mapContainer.addEventListener('pointerdown', beginDrawStroke);
+	mapContainer.addEventListener('pointermove', continueDrawStroke);
+	mapContainer.addEventListener('pointerup', finishDrawStroke);
+	mapContainer.addEventListener('pointercancel', finishDrawStroke);
+	map.on('click', addDrawPoint);
 	map.on('tileerror', () => {
 		elements.mapStatus.textContent = 'Atlas no disponible';
 	});
@@ -694,9 +613,18 @@ async function initialize() {
 }
 
 elements.locationSearch.addEventListener('input', renderLocations);
-elements.regionColor.addEventListener('input', updateDrawCellColor);
+elements.regionColor.addEventListener('input', updateDrawShapeColor);
+elements.drawCategory.addEventListener('change', () => {
+	const category = categories.find((item) => item.id === elements.drawCategory.value);
+	if (!category) return;
+	elements.regionColor.value = category.color;
+	updateDrawShapeColor();
+});
+document.querySelectorAll('[data-draw-mode]').forEach((button) => {
+	button.addEventListener('click', () => setDrawingMode(button.dataset.drawMode));
+});
 document.querySelector('#fit-map').addEventListener('click', fitVisible);
-document.querySelector('#draw-region').addEventListener('click', startDrawing);
+document.querySelector('#draw-region').addEventListener('click', () => startDrawing());
 document.querySelector('#cancel-region').addEventListener('click', cancelDrawing);
 document.querySelector('#finish-region').addEventListener('click', exportRegion);
 elements.saveRegion.addEventListener('click', saveRegion);

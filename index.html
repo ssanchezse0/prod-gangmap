@@ -19,7 +19,7 @@
 	</script>
 	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-	<script src="js/territory-map-grid.js?v=21" defer></script>
+	<script src="js/territory-map-grid.js?v=25" defer></script>
 </head>
 <body>
 	<div class="app-shell">
@@ -72,7 +72,20 @@
 				<div id="map" role="application" aria-label="Mapa interactivo de Los Santos"></div>
 				<div class="map-caption"><span class="caption-dot"></span>LOS SANTOS <span class="caption-divider">/</span> ATLAS</div>
 				<div class="draw-controls" id="draw-controls" hidden>
-					<span id="draw-hint">Selecciona cuadrados del mapa para crear una zona</span>
+					<span id="draw-hint">Arrastra sobre el mapa para dibujar una zona</span>
+					<div class="draw-mode-selector" role="group" aria-label="Modo de dibujo">
+						<button class="draw-mode-button is-active" id="draw-mode-freehand" data-draw-mode="freehand" type="button" aria-pressed="true">Libre</button>
+						<button class="draw-mode-button" id="draw-mode-points" data-draw-mode="points" type="button" aria-pressed="false">PtP</button>
+					</div>
+					<label class="draw-layer-control" for="draw-category">Capa
+						<select id="draw-category" aria-label="Capa de destino">
+							<option value="territories">Territorios</option>
+							<option value="legal">Facciones</option>
+							<option value="neighborhoods">Barrios</option>
+							<option value="heists">Atracos</option>
+							<option value="restaurants">Locales</option>
+						</select>
+					</label>
 					<label class="draw-color-control" for="region-color">Color <input id="region-color" type="color" value="#e2764d" aria-label="Color de la zona" title="Color de la zona"></label>
 					<button class="button button-quiet" id="cancel-region" type="button">Cancelar</button>
 					<button class="button button-primary" id="finish-region" type="button">Exportar zona (0)</button>
