@@ -12,10 +12,32 @@ and submit a pull request.
 1. Clone this repository
 2. Host the repository using Nginx, Apache, or another webserver.
 
-To host the repository using Python 3 use in the root of the repository:
+To host the repository using Python 3 from the root of the repository:
 ```
-python -m http.server
+python -m http.server 8000
 ```
+
+If you are on Windows and Python is installed, you can run:
+```
+python.exe -m http.server 8000
+```
+
+Or use the included helper script:
+```
+.\start-local.ps1
+```
+
+## Supabase admin setup
+
+1. Create a Supabase project.
+2. Run `supabase/schema.sql` in the SQL editor.
+3. Create the admin user in Authentication > Users.
+4. Copy the user UUID and insert it into `public.zone_admins`:
+   ```sql
+   insert into public.zone_admins (user_id)
+   values ('USER-UUID');
+   ```
+5. Set the project URL and publishable key in the `window.SUPABASE_CONFIG` block in `index.html`.
 
 ## Publish with GitHub Pages
 1. Push this project to the `main` branch of your GitHub repository.
@@ -29,7 +51,7 @@ python -m http.server
 	```sql
 	insert into public.zone_admins (user_id) values ('USER-UUID');
 	```
-4. Set the project URL and publishable key in `js/supabase-config.js`, then push to `main`. The publishable key is safe in the browser because RLS protects writes; never add a service-role key or password to the repository.
+4. Set the project URL and publishable key in the `window.SUPABASE_CONFIG` block in `index.html`, then push to `main`. The publishable key is safe in the browser because RLS protects writes; never add a service-role key or password to the repository.
 5. Use **Acceso admin** on the map to sign in. Everyone else can read zones but cannot create, edit, or delete them.
 
 ## License

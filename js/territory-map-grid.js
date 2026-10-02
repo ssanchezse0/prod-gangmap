@@ -7,8 +7,9 @@ const categories = [
 ];
 
 const supabaseConfig = window.SUPABASE_CONFIG || {};
-const supabaseClient = window.supabase?.createClient && supabaseConfig.url && supabaseConfig.publicKey
-	? window.supabase.createClient(supabaseConfig.url, supabaseConfig.publicKey)
+const supabaseKey = supabaseConfig.publicKey || supabaseConfig.anonKey || '';
+const supabaseClient = window.supabase?.createClient && supabaseConfig.url && supabaseKey
+	? window.supabase.createClient(supabaseConfig.url, supabaseKey)
 	: null;
 let isAdmin = false;
 let editingRecord = null;
@@ -52,8 +53,10 @@ let toastTimeout;
 let patternIndex = 0;
 
 let gridReferenceZoom = 4;
-const GRID_CELL_SIZE = 6;
+let gridOffsetReferenceZoom = 4;
+const GRID_CELL_SIZE = 3.5;
 const GRID_OFFSET_X = 4;
+const MAX_GRID_CELLS = 20000;
 
 function escapeHTML(value = '') {
 	return String(value).replace(/[&<>"']/g, (character) => ({
@@ -146,7 +149,7 @@ staticGrid.createTile = (coordinates) => {
 	tile.style.pointerEvents = 'none';
 	const context = tile.getContext('2d');
 	const cellSize = GRID_CELL_SIZE * 2 ** (coordinates.z - gridReferenceZoom);
-	const offsetX = GRID_OFFSET_X * 2 ** (coordinates.z - gridReferenceZoom);
+	const offsetX = GRID_OFFSET_X * 2 ** (coordinates.z - gridOffsetReferenceZoom);
 	const originX = coordinates.x * 256;
 	const originY = coordinates.y * 256;
 	const firstX = Math.ceil((originX - offsetX) / cellSize) * cellSize + offsetX - originX;
@@ -348,13 +351,18 @@ async function deleteRecord(recordKey) {
 
 function startDrawing(record = null) {
 	if (!isAdmin) return;
+	if (!map || !window.L) {
+		showToast('El mapa todavía está cargando. Inténtalo de nuevo en unos segundos.');
+		return;
+	}
 	if (drawing) return;
-	if (record?.feature.getBounds) map.fitBounds(record.feature.getBounds(), { maxZoom: 7, padding: [48, 48], animate: false });
+	if (record?.feature?.getBounds) map.fitBounds(record.feature.getBounds(), { maxZoom: 7, padding: [48, 48], animate: false });
 	drawing = true;
 	editingRecord = record;
 	selectedCells.clear();
 	drawLayer = L.layerGroup().addTo(map);
-	gridReferenceZoom = map.getZoom();
+	gridReferenceZoom = map.getZoom() - 1;
+	gridOffsetReferenceZoom = gridReferenceZoom;
 	staticGrid.redraw();
 	staticGrid.addTo(map);
 	map.getContainer().classList.add('is-drawing');
@@ -380,8 +388,9 @@ function cancelDrawing(preserveEdit = false) {
 }
 
 function getCellBounds(column, row) {
-	const left = column * GRID_CELL_SIZE + GRID_OFFSET_X;
-	const right = (column + 1) * GRID_CELL_SIZE + GRID_OFFSET_X;
+	const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
+	const left = column * GRID_CELL_SIZE + offsetX;
+	const right = (column + 1) * GRID_CELL_SIZE + offsetX;
 	const topLeft = map.unproject(L.point(left, row * GRID_CELL_SIZE), gridReferenceZoom);
 	const bottomRight = map.unproject(L.point(right, (row + 1) * GRID_CELL_SIZE), gridReferenceZoom);
 	return L.latLngBounds(topLeft, bottomRight);
@@ -404,7 +413,8 @@ function setGridCell(column, row, refreshPreview = true) {
 
 function toggleGridCell(latlng) {
 	const projected = map.project(latlng, gridReferenceZoom);
-	const column = Math.floor((projected.x - GRID_OFFSET_X) / GRID_CELL_SIZE);
+	const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
+	const column = Math.floor((projected.x - offsetX) / GRID_CELL_SIZE);
 	const row = Math.floor(projected.y / GRID_CELL_SIZE);
 	const key = `${column}:${row}`;
 	const existing = selectedCells.get(key);
@@ -434,19 +444,20 @@ function selectRecordCells(record) {
 		return { x: projected.x, y: projected.y };
 	});
 	if (polygon.length < 3) return;
-	const columns = polygon.map((point) => Math.floor((point.x - GRID_OFFSET_X) / GRID_CELL_SIZE));
+	const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
+	const columns = polygon.map((point) => Math.floor((point.x - offsetX) / GRID_CELL_SIZE));
 	const rows = polygon.map((point) => Math.floor(point.y / GRID_CELL_SIZE));
 	const minColumn = Math.min(...columns);
 	const maxColumn = Math.max(...columns);
 	const minRow = Math.min(...rows);
 	const maxRow = Math.max(...rows);
-	if ((maxColumn - minColumn + 1) * (maxRow - minRow + 1) > 20000) {
+	if ((maxColumn - minColumn + 1) * (maxRow - minRow + 1) > MAX_GRID_CELLS) {
 		showToast('Acerca el mapa antes de editar esta zona.');
 		return;
 	}
 	for (let row = minRow; row <= maxRow; row++) {
 		for (let column = minColumn; column <= maxColumn; column++) {
-			const center = { x: column * GRID_CELL_SIZE + GRID_OFFSET_X + GRID_CELL_SIZE / 2, y: row * GRID_CELL_SIZE + GRID_CELL_SIZE / 2 };
+			const center = { x: column * GRID_CELL_SIZE + offsetX + GRID_CELL_SIZE / 2, y: row * GRID_CELL_SIZE + GRID_CELL_SIZE / 2 };
 			if (pointInPolygon(center, polygon)) setGridCell(column, row, false);
 		}
 	}
@@ -525,6 +536,7 @@ function exportRegion() {
 		return;
 	}
 	const region = {
+		_legacyRecordKey: editingRecord?._legacyRecordKey,
 		type: editingRecord?.type || 'Territories',
 		title: elements.regionTitle.value.trim() || 'Nueva zona',
 		notes: elements.regionNotes.value.trim(),
@@ -533,7 +545,8 @@ function exportRegion() {
 		strokecolor: editingRecord?.strokecolor || 'E2764D',
 		fillcolor: editingRecord?.fillcolor || 'E2764D',
 		latlngarray: boundary.map(({ x, y }) => {
-			const point = map.unproject(L.point(x * GRID_CELL_SIZE + GRID_OFFSET_X, y * GRID_CELL_SIZE), gridReferenceZoom);
+			const offsetX = GRID_OFFSET_X * 2 ** (gridReferenceZoom - gridOffsetReferenceZoom);
+			const point = map.unproject(L.point(x * GRID_CELL_SIZE + offsetX, y * GRID_CELL_SIZE), gridReferenceZoom);
 			return { lat: Number(point.lat.toFixed(3)), lng: Number(point.lng.toFixed(3)) };
 		}),
 	};
@@ -555,34 +568,50 @@ async function saveRegion() {
 		return;
 	}
 	const categoryId = editingRecord?.categoryId || 'territories';
+	const categoryState = categoryLayers.get(categoryId);
+	const category = categories.find((item) => item.id === categoryId);
+	const pointsAreValid = Array.isArray(region.latlngarray)
+		&& region.latlngarray.length >= 3
+		&& region.latlngarray.every((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lng)));
+	if (!map || !categoryState?.layer || !category || !pointsAreValid) {
+		showToast('El mapa aún no está listo o la zona no tiene coordenadas válidas.');
+		return;
+	}
 	let result;
-	if (editingRecord) {
-		if (!editingRecord.id) {
-			showToast('Esta zona debe existir en Supabase para editarse.');
-			return;
-		}
+	if (editingRecord?.id) {
 		result = await supabaseClient.from('zones').update({ data: region }).eq('id', editingRecord.id).select('id, data').single();
 	} else {
-		result = await supabaseClient.from('zones').insert({ category: categoryId, data: region }).select('id, data').single();
+		const data = editingRecord ? { ...region, _legacyRecordKey: editingRecord.recordKey } : region;
+		result = await supabaseClient.from('zones').insert({ category: categoryId, data }).select('id, data').single();
 	}
 	if (result.error) {
 		showToast(result.error.message);
 		return;
 	}
 
-	const category = categories.find((item) => item.id === categoryId);
 	if (editingRecord) {
-		categoryLayers.get(categoryId).layer.removeLayer(editingRecord.feature);
-		locationRecords.splice(locationRecords.indexOf(editingRecord), 1);
-		categoryLayers.get(categoryId).records = categoryLayers.get(categoryId).records.filter((record) => record.id !== editingRecord.id);
+		if (editingRecord.feature) categoryState.layer.removeLayer(editingRecord.feature);
+		const recordIndex = locationRecords.indexOf(editingRecord);
+		if (recordIndex >= 0) locationRecords.splice(recordIndex, 1);
+		categoryState.records = categoryState.records.filter((record) => record !== editingRecord);
 	}
 	const savedRecord = { ...result.data.data, id: result.data.id };
 	const feature = createFeature(savedRecord, category);
-	if (feature) categoryLayers.get(categoryId).layer.addLayer(feature);
-	categoryLayers.get(categoryId).records.push(locationRecords[locationRecords.length - 1]);
+	if (!feature) {
+		showToast('Supabase guardó la zona, pero sus coordenadas no se pudieron dibujar.');
+		return;
+	}
+	categoryState.layer.addLayer(feature);
+	const savedEntry = locationRecords[locationRecords.length - 1];
+	if (!savedEntry) {
+		categoryState.layer.removeLayer(feature);
+		showToast('No se pudo actualizar la lista de zonas.');
+		return;
+	}
+	categoryState.records.push(savedEntry);
 	if (!activeCategoryIds.has(categoryId)) {
 		activeCategoryIds.add(categoryId);
-		categoryLayers.get(categoryId).layer.addTo(map);
+		categoryState.layer.addTo(map);
 	}
 	elements.exportDialog.hidden = true;
 	elements.saveRegion.hidden = true;
@@ -598,12 +627,16 @@ async function loadCategory(category) {
 	let records;
 	if (supabaseClient) {
 		const { data, error } = await supabaseClient.from('zones').select('id, data').eq('category', category.id).order('created_at');
-		if (error) {
-			const response = await fetch(`data/${category.file}?v=${Date.now()}`, { cache: 'no-store' });
-			if (!response.ok) throw new Error(`No se pudo cargar ${category.file}`);
-			records = await response.json();
-		} else {
-			records = data.map((record) => ({ ...record.data, id: record.id }));
+		const response = await fetch(`data/${category.file}?v=${Date.now()}`, { cache: 'no-store' });
+		if (!response.ok && error) throw new Error(`No se pudo cargar ${category.file}`);
+		const localRecords = response.ok ? await response.json() : [];
+		if (error) records = localRecords;
+		else {
+			const replacedKeys = new Set(data.map((record) => record.data._legacyRecordKey).filter(Boolean));
+			records = [
+				...localRecords.filter((record) => !replacedKeys.has(createRecordKey(record, category.id))),
+				...data.map((record) => ({ ...record.data, id: record.id })),
+			];
 		}
 	} else {
 		const response = await fetch(`data/${category.file}?v=${Date.now()}`, { cache: 'no-store' });
@@ -620,7 +653,7 @@ async function loadCategory(category) {
 }
 
 async function initialize() {
-	map = L.map('map', { zoomControl: false, minZoom: 1, maxZoom: 7, doubleClickZoom: false }).setView([-60, -20], 3);
+	map = L.map('map', { zoomControl: false, minZoom: 1, maxZoom: 7, doubleClickZoom: false, zoomAnimation: false }).setView([-60, -20], 3);
 	L.tileLayer('https://media.githubusercontent.com/media/LowS1312/inf-gangmap/main/tiles/atlas/{z}/{x}_{y}.png', {
 		minZoom: 1,
 		maxZoom: 7,
@@ -635,7 +668,6 @@ async function initialize() {
 	map.on('tileerror', () => {
 		elements.mapStatus.textContent = 'Atlas no disponible';
 	});
-
 	try {
 		await Promise.all(categories.map(loadCategory));
 		renderLayers();
